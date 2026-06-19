@@ -21,6 +21,7 @@ func main() {
 
 	// 3. Crear el motor de enrutamiento de Gin
 	r := gin.Default()
+	r.Use(middleware.NewCorsMiddleware())
 
 	// 4. Obtener el repositorio de usuarios (se necesita para el login/auth y pasarlo a libros)
 	userRepo := usersInfra.NewMySQL()
