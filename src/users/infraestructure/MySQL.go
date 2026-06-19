@@ -1,6 +1,8 @@
 package infraestructure
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"bookshelf/src/config"
 	"bookshelf/src/users/domain"
@@ -47,8 +49,8 @@ func (mysql *MySQL) GetAll() ([]domain.User, error) {
 	var users []domain.User
 
 	for rows.Next() {
-		var user domain.User
-		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.CreatedAt); err != nil {
+		user, err := scanUser(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("Error al escanear la fila: %v", err)
 		}
 		users = append(users, user)
@@ -92,17 +94,36 @@ func (mysql *MySQL) DeleteUser(id int32) error {
 	return nil
 }
 
+func scanUser(scan func(dest ...any) error) (domain.User, error) {
+	var user domain.User
+	var createdAt sql.NullTime
+
+	if err := scan(&user.ID, &user.Name, &user.Email, &user.Password, &createdAt); err != nil {
+		return domain.User{}, err
+	}
+
+	if createdAt.Valid {
+		user.CreatedAt = createdAt.Time
+	}
+
+	return user, nil
+}
+
 func (mysql *MySQL) GetUserByCredentials(email string) (*domain.User, error) {
-	query := "SELECT id, name, email, password, created_at FROM users WHERE email = ?"
+	query := "SELECT id, name, email, password FROM users WHERE email = ?"
 	row, err := mysql.conn.FetchRow(query, email)
 	if err != nil {
 		return nil, fmt.Errorf("error al ejecutar la consulta: %v", err)
 	}
 
 	var user domain.User
-	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.CreatedAt)
+	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password)
 	if err != nil {
-		return nil, fmt.Errorf("usuario no encontrado")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("usuario no encontrado")
+		}
+		log.Printf("[MySQL] Error al leer usuario por email %s: %v", email, err)
+		return nil, fmt.Errorf("error al leer usuario: %v", err)
 	}
 
 	return &user, nil
@@ -115,10 +136,13 @@ func (mysql *MySQL) GetUserByID(id int32) (*domain.User, error) {
 		return nil, fmt.Errorf("error al ejecutar la consulta: %v", err)
 	}
 
-	var user domain.User
-	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.CreatedAt)
+	user, err := scanUser(row.Scan)
 	if err != nil {
-		return nil, fmt.Errorf("usuario no encontrado")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("usuario no encontrado")
+		}
+		log.Printf("[MySQL] Error al leer usuario por id %d: %v", id, err)
+		return nil, fmt.Errorf("error al leer usuario: %v", err)
 	}
 
 	return &user, nil
