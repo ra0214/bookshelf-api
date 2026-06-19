@@ -27,7 +27,7 @@ func GetDBPool() *Conn_MySQL {
 	dbPass := os.Getenv("DB_PASS")
 	dbSchema := os.Getenv("DB_SCHEMA")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPass, dbHost, dbSchema)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", dbUser, dbPass, dbHost, dbSchema)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
